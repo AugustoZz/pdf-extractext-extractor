@@ -30,13 +30,43 @@ class ExtractionResult:
 
 def extract(data: bytes) -> ExtractionResult:
     with _open(data) as doc:
-        blocks = [
-            spans
-            for page in doc
-            for block in page.get_text("dict", flags=_TEXT_FLAGS, sort=True)["blocks"]
-            if (spans := _text_spans(block))
-        ]
-        return ExtractionResult(content=_to_markdown(blocks), page_count=doc.page_count)
+        # Sólo conservamos lo necesario para Markdown, no el árbol completo de
+        # geometría, fuentes y colores de todas las páginas. El tamaño del cuerpo
+        # sigue calculándose sobre todos los spans del documento.
+        blocks: list[tuple[str, float, bool]] = []
+        sizes: list[int] = []
+        for page in doc:
+            page_blocks = page.get_textpage(flags=_TEXT_FLAGS).extractDICT(sort=True)["blocks"]
+            for block in page_blocks:
+                parts = []
+                maximum_size = 0.0
+                bold = True
+                for line in block.get("lines", ()):
+                    for span in line["spans"]:
+                        text = span["text"].strip()
+                        if not text:
+                            continue
+                        parts.append(text)
+                        size = span["size"]
+                        sizes.append(round(size))
+                        if size > maximum_size:
+                            maximum_size = size
+                        bold = bold and bool(span["flags"] & pymupdf.TEXT_FONT_BOLD)
+                if parts:
+                    blocks.append((" ".join(parts), maximum_size, bold))
+        body_size = Counter(sizes).most_common(1)[0][0] if sizes else 0
+        headings = body_size * _HEADING_RATIO
+        subheadings = body_size * _SUBHEADING_RATIO
+        paragraphs = []
+        for text, size, bold in blocks:
+            if size >= headings:
+                text = f"# {text}"
+            elif size >= subheadings:
+                text = f"## {text}"
+            elif bold:
+                text = f"**{text}**"
+            paragraphs.append(text)
+        return ExtractionResult(content="\n\n".join(paragraphs), page_count=doc.page_count)
 
 
 def _open(data: bytes) -> pymupdf.Document:
@@ -58,27 +88,3 @@ def _open(data: bytes) -> pymupdf.Document:
             "El archivo PDF está protegido con contraseña y no se puede procesar."
         )
     return doc
-
-
-def _text_spans(block: dict) -> list[dict]:
-    """Fragmentos con texto de un bloque (los bloques de imagen no tienen líneas)."""
-    return [span for line in block.get("lines", []) for span in line["spans"] if span["text"].strip()]
-
-
-def _to_markdown(blocks: list[list[dict]]) -> str:
-    # El cuerpo es el tamaño de letra más usado del documento.
-    sizes = Counter(round(span["size"]) for spans in blocks for span in spans)
-    body_size = sizes.most_common(1)[0][0] if sizes else 0
-    return "\n\n".join(_block_to_markdown(spans, body_size) for spans in blocks)
-
-
-def _block_to_markdown(spans: list[dict], body_size: float) -> str:
-    text = " ".join(span["text"].strip() for span in spans)
-    size = max(span["size"] for span in spans)
-    if size >= body_size * _HEADING_RATIO:
-        return f"# {text}"
-    if size >= body_size * _SUBHEADING_RATIO:
-        return f"## {text}"
-    if all(span["flags"] & pymupdf.TEXT_FONT_BOLD for span in spans):
-        return f"**{text}**"
-    return text

@@ -6,10 +6,12 @@ services:
   # Se accede sólo a través de extractor-lb.
   extractor:
     build: .
+    command: ["uvicorn", "extractor_service.main:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-keep-alive", "60", "--no-access-log"]
     environment:
       # Sin valor: se pasa sólo si está definida en el host; si no, rige el
       # valor por defecto de extractor_service/config.py.
       - QUEUE_TIMEOUT_S
+      - REQUEST_TIMEOUT_S
     deploy:
       # El TP permite hasta 5 réplicas; variable para comparar escenarios.
       replicas: ${EXTRACTOR_REPLICAS:-5}
@@ -46,11 +48,16 @@ services:
 
   # ── Pruebas de carga ────────────────────────────────────────────
   # Perfil "stress": no arrancan con `docker compose up`, se corren a pedido.
-  # Sin límites a propósito: son el generador de carga, no el sistema medido, y
-  # limitarlos falsearía las mediciones.
+  # Los generadores también tienen límites explícitos. k6 necesita memoria para
+  # los PDFs del script original, que se abren en el contexto de cada VU.
   k6:
     image: grafana/k6:2.3.0
     profiles: ["stress"]
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 3G
     command: ["run", "--summary-export=/stress/results/k6-spike.json", "/stress/k6/spike.js"]
     environment:
       # Dashboard en vivo (http://localhost:5665) y exportado a HTML para el informe.
@@ -69,6 +76,11 @@ services:
   vegeta:
     build: ./tests/stress/vegeta
     profiles: ["stress"]
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
     entrypoint: ["sh", "/stress/vegeta/run.sh"]
     volumes:
       - ./tests/stress:/stress

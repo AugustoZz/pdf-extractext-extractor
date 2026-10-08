@@ -49,7 +49,7 @@ def test_pdf_over_size_limit_returns_413(monkeypatch, post_pdf, text_pdf):
     response = post_pdf(text_pdf + b"\0" * (1024 * 1024))
 
     assert response.status_code == 413
-    assert "1 MB" in response.json()["detail"]
+    assert "tamaño máximo" in response.json()["detail"]
 
 
 def test_pdf_at_size_limit_is_accepted(monkeypatch, post_pdf, text_pdf):
@@ -59,9 +59,9 @@ def test_pdf_at_size_limit_is_accepted(monkeypatch, post_pdf, text_pdf):
     assert post_pdf(text_pdf + padding).status_code == 200
 
 
-def test_saturated_service_returns_503(monkeypatch, post_pdf, text_pdf):
+def test_saturated_service_returns_503(monkeypatch, client, post_pdf, text_pdf):
     # Sin lugares libres: ninguna petición puede entrar.
-    monkeypatch.setattr(main, "_admission", Admission(capacity=0, wait_timeout=0.01))
+    monkeypatch.setattr(client.app.state.pool, "_admission", Admission(capacity=0, wait_timeout=0.01))
 
     response = post_pdf(text_pdf)
 

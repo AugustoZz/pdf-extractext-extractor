@@ -21,11 +21,17 @@ class Admission:
 
     @asynccontextmanager
     async def slot(self) -> AsyncIterator[None]:
+        await self.acquire()
+        try:
+            yield
+        finally:
+            self.release()
+
+    async def acquire(self) -> None:
         try:
             await asyncio.wait_for(self._slots.acquire(), self._wait_timeout)
         except TimeoutError as exc:
             raise Saturated from exc
-        try:
-            yield
-        finally:
-            self._slots.release()
+
+    def release(self) -> None:
+        self._slots.release()
