@@ -1,0 +1,16 @@
+# Complemento del Compose base: HTTPS por el host y CA local validada por k6.
+services:
+  extractor-lb:
+    ports:
+      - "443:443"
+    volumes:
+      - ./nginx/profesor.conf:/etc/nginx/nginx.conf:ro
+      - ./tests/stress/tls:/etc/nginx/tls:ro
+  k6:
+    extra_hosts:
+      - "extract.universidad.localhost:${LOAD_HOST_GATEWAY:-host-gateway}"
+    environment:
+      - SSL_CERT_FILE=/stress/tls/ca.pem
+  vegeta:
+    extra_hosts:
+      - "host.docker.internal:${LOAD_HOST_GATEWAY:-host-gateway}"

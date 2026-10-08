@@ -29,13 +29,20 @@ cliente ──► extractor-lb (nginx, least_conn) ──► extractor × 5 rép
 ```
 
 - **extractor:** FastAPI + uvicorn. La extracción (PyMuPDF con un conversor a Markdown
-  propio) corre en un pool de procesos, fuera del event loop. Un control de admisión
-  procesa un PDF por vez por réplica y responde 503 si la petición espera más de
-  `QUEUE_TIMEOUT_S`.
-- **extractor-lb:** nginx ajustado para PDFs de varios MB.
+  propio) corre en un pool de procesos, fuera del event loop. La recepción del PDF
+  y la extracción tienen controles separados: hasta 32 PDFs en recepción/cola y
+  una extracción activa por réplica. Cada adquisición tiene una espera máxima
+  de `QUEUE_TIMEOUT_S`; un presupuesto total de `REQUEST_TIMEOUT_S` (25 s)
+  cubre recepción, colas y procesamiento. Si se supera, responde 503. Los PDFs
+  pasan al proceso por memoria compartida reutilizable; una cancelación conserva
+  el buffer y cupo de CPU hasta que termina el trabajo real.
+- **extractor-lb:** nginx con conexiones HTTP persistentes, reparto `least_conn`
+  compartido y envío directo del body para PDFs de varios MB.
 
 El porqué de cada decisión, con mediciones, está en el
 [informe de carga](docs/informe-carga.md).
+
+El [informe de refactorización](docs/refactor-2026-10-08.md) resume arquitectura, investigación, antes/después y condiciones de carga. Incluye dos JSON originales y un enlace al respaldo completo.
 
 | Tecnología | Uso |
 |---|---|

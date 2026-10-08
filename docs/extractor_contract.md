@@ -33,8 +33,19 @@ Es el formato que envían los scripts de k6 y Vegeta de la cátedra.
 | Supera el tamaño máximo           |  413   | `{"detail": "El archivo supera el tamaño..."}`   |
 | Servicio saturado (backpressure)  |  503   | `{"detail": "Servicio saturado, reintentar."}`   |
 
-El 503 se responde de inmediato cuando el servicio no puede procesar la petición
-a tiempo, en vez de encolarla hasta que el cliente corte por timeout.
+La recepción y la extracción tienen admisión separada. Cada etapa espera hasta
+`QUEUE_TIMEOUT_S` para adquirir un lugar. Además, `REQUEST_TIMEOUT_S` impone un
+presupuesto total de 25 s desde que el extractor recibe la petición, incluyendo
+recepción, colas y procesamiento. Se responde 503 si se agota alguno de estos
+límites. No incluye el tiempo previo en la red o el proxy.
+
+La recepción/cola admite hasta `MAX_INFLIGHT` peticiones por réplica (32 por
+defecto), con una extracción activa por CPU. Los PDFs pasan al proceso mediante
+buffers de memoria compartida reutilizables (10 MiB por worker con la configuración
+predeterminada), sin serializar el PDF por una tubería. No se almacenan resultados.
+Si una petición vence o se cancela durante la extracción, su buffer y cupo de CPU
+siguen reservados hasta que finaliza el trabajo real; no se encolan trabajos extra
+en el executor ni se sobrescribe un PDF que todavía se está leyendo.
 
 ## GET /health
 200 `{"status": "ok"}`

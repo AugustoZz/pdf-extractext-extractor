@@ -1,4 +1,6 @@
-# Los scripts y los targets de Vegeta se leen dentro de contenedores Linux:
-# con CRLF, sh falla y Vegeta no encuentra los PDFs.
+# Shell scripts and workload inputs must remain usable in Linux containers
+# even when the repository is checked out with core.autocrlf on Windows.
 *.sh text eol=lf
-tests/stress/vegeta/targets.txt text eol=lf
+tests/stress/**/*.js text eol=lf
+tests/stress/**/targets.txt text eol=lf
+tests/stress/profesor/test_carga.txt text eol=lf

@@ -11,3 +11,6 @@ tests/stress/results/*
 
 # PDFs oficiales de la cátedra: material de terceros, no se versiona
 tests/stress/pdfs/*.pdf
+
+# Certificados y claves locales regenerables para el test HTTPS.
+tests/stress/tls/

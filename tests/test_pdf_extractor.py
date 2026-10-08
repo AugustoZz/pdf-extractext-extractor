@@ -1,5 +1,6 @@
 """Tests de la extracción de texto, independientes de HTTP."""
 import pytest
+import pymupdf
 
 from extractor_service.pdf_extractor import PDFValidationError, extract
 from tests.pdf_factory import build_pdf
@@ -39,6 +40,35 @@ class TestExtract:
 
     def test_accepts_pdf_with_owner_restrictions_only(self, owner_restricted_pdf):
         assert extract(owner_restricted_pdf).page_count == 1
+
+    def test_preserves_reading_order_when_blocks_were_drawn_out_of_order(self):
+        with pymupdf.open() as doc:
+            page = doc.new_page()
+            page.insert_text((72, 200), "Segundo")
+            page.insert_text((72, 100), "Primero")
+            pdf = doc.tobytes()
+
+        assert extract(pdf).content == "Primero\n\nSegundo"
+
+    def test_mixed_regular_and_bold_spans_do_not_make_entire_paragraph_bold(self):
+        with pymupdf.open() as doc:
+            page = doc.new_page()
+            page.insert_text((72, 100), "Texto", fontname="hebo")
+            page.insert_text((104, 100), " normal", fontname="helv")
+            pdf = doc.tobytes()
+
+        assert extract(pdf).content == "Texto normal"
+
+    def test_preserves_reading_order_and_formatting_on_rotated_page(self):
+        with pymupdf.open() as doc:
+            page = doc.new_page()
+            page.insert_text((72, 200), "Cuerpo")
+            page.insert_text((72, 100), "Titulo", fontsize=24)
+            page.insert_text((72, 240), "Mas cuerpo")
+            page.set_rotation(90)
+            pdf = doc.tobytes()
+
+        assert extract(pdf).content == "# Titulo\n\nCuerpo\n\nMas cuerpo"
 
 
 class TestValidation:
